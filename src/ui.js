@@ -32,7 +32,7 @@ export function renderHome(el) {
         <div class="feat"><span>♿</span><b>شامل للجميع</b><small>5 أنواع تدريب مخصصة</small></div>
         <div class="feat"><span>📊</span><b>تقارير ومتابعة</b><small>زمن وإخلاء وأخطاء للمشرف</small></div>
       </div>
-      <p class="hint">يعمل من المتصفح مباشرة — WASD + الفأرة — مناسب للنشر على Vercel</p>
+      <p class="hint">يعمل من المتصفح مباشرة — WASD + الفأرة</p>
     </div>
   </div>`
 }

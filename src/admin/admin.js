@@ -53,7 +53,7 @@ export function renderDashboard(el, state) {
   <div class="page">
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-        <h2 style="margin:0">📊 لوحة المشرف — SafeSense VR</h2>
+        <h2 style="margin:0">📊 لوحة المشرف — محاكاة إخلاء الطوارئ</h2>
         <div><button id="btnLogout" class="btn ghost small">تسجيل الخروج</button> <a class="btn ghost small" href="#/">الرئيسية</a></div>
       </div>
       <div class="admin-tabs">
