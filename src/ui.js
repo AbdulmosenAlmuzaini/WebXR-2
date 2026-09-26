@@ -2,26 +2,29 @@
 // SafeSense VR — واجهات المتدربة + مشغّل التدريب 3D
 // ============================================================
 import * as THREE from 'three'
-import { APP_CONFIG, USER_TYPES, LEVEL_LABELS } from './config/appConfig.js'
+import { APP_CONFIG, USER_TYPES, LEVEL_LABELS, userTypeLabel } from './config/appConfig.js'
 import { SCENARIOS, getScenario } from './scenarios.js'
 import { buildSchool, animateWorld } from './scene.js'
 import { Player, makeCollider } from './player.js'
-import { AudioManager, speak, helpContent, instructionFor, detectZones } from './simulation.js'
+import { AudioManager, resolveScenarioId } from './audioManager.js'
+import { speak, helpContent, instructionFor, detectZones } from './simulation.js'
 import { SessionTracker, formatTime } from './sessionTracker.js'
 import { calculateNextLevel, levelAdvice } from './adaptiveEngine.js'
 import { saveSession, getStudentSessions } from './services/storage.js'
+import { getTrainingConfig, setTrainingConfig } from './services/trainingConfig.js'
 
-// ---------------- الشاشة الرئيسية ----------------
+// ---------------- الشاشة الرئيسية HOME ----------------
+// لا Canvas · لا Scene · لا Pointer Lock · لا سيناريو · لا إنذار
 export function renderHome(el) {
   el.innerHTML = `
   <div class="page home">
     <div class="hero card">
       <div class="logo">🛡️</div>
-      <h1>${APP_CONFIG.appName}</h1>
-      <p class="subtitle">${APP_CONFIG.appSubtitle}</p>
+      <h1>SafeSense VR</h1>
+      <p class="subtitle">نظام تدريب افتراضي تكيفي للسلامة والإخلاء</p>
       <div class="home-actions">
-        <a class="btn primary big" href="#/setup">🎓 بدء التدريب</a>
-        <a class="btn ghost big" href="#/admin">🔐 دخول المشرف</a>
+        <a class="btn primary big" href="#/train">بدء التدريب</a>
+        <a class="btn ghost big" href="#/admin">دخول المشرف</a>
       </div>
       <div class="features">
         <div class="feat"><span>🏫</span><b>محاكاة مدرسية 3D</b><small>فصل وممر ومخارج ومنطقة تجمع</small></div>
@@ -34,7 +37,10 @@ export function renderHome(el) {
   </div>`
 }
 
-// ---------------- شاشة الإعداد: نوع المستخدم + الاسم + السيناريو ----------------
+// ---------------- شاشة الإعداد TRAINING_SETUP ----------------
+// خطوتان إجباريتان، ولا تبدأ أي محاكاة هنا:
+// أولًا اختيار نوع المستخدم → ثم السيناريوهات الأربعة → زر "دخول المحاكاة 3D"
+// الذي يحفظ trainingConfig في sessionStorage ثم ينتقل إلى #/simulation.
 export function renderSetup(el, state) {
   const lastSessions = state.studentName ? getStudentSessions(state.studentName) : []
   const suggestedLevel = lastSessions[0]?.nextLevel || 'easy'
@@ -58,33 +64,40 @@ export function renderSetup(el, state) {
   <div class="page setup">
     <div class="card">
       <a class="back" href="#/">→ عودة</a>
-      <h2>اختر نوع التدريب المناسب</h2>
+      <h2>أولًا: اختيار نوع المستخدم</h2>
       <div class="type-grid">${typeCards}</div>
-      <h2>بيانات المتدربة والسيناريو</h2>
-      <div class="form-row">
-        <label>اسم المتدربة أو المعرف
-          <input id="inpName" type="text" placeholder="مثال: نورة" value="${escapeHtml(state.studentName || '')}" />
-        </label>
-        <label>مستوى البداية (تكيفي)
-          <select id="selLevel">
-            ${['easy', 'medium', 'hard'].map((l) => `<option value="${l}" ${state.startLevel === l ? 'selected' : ''}>${LEVEL_LABELS[l]}</option>`).join('')}
-          </select>
-        </label>
+      <div id="setupStep2" class="${state.userType ? '' : 'hidden'}">
+        <h2>ثانيًا: اختر السيناريو</h2>
+        <div class="form-row">
+          <label>اسم المتدربة أو المعرف
+            <input id="inpName" type="text" placeholder="مثال: نورة" value="${escapeHtml(state.studentName || '')}" />
+          </label>
+          <label>مستوى البداية (تكيفي)
+            <select id="selLevel">
+              ${['easy', 'medium', 'hard'].map((l) => `<option value="${l}" ${state.startLevel === l ? 'selected' : ''}>${LEVEL_LABELS[l]}</option>`).join('')}
+            </select>
+          </label>
+        </div>
+        ${lastSessions[0] ? `<p class="info">👋 مرحبًا ${escapeHtml(state.studentName)} — مستواك المقترح: <b>${LEVEL_LABELS[lastSessions[0].nextLevel] || lastSessions[0].nextLevel}</b> (من آخر تدريب)</p>` : ''}
+        <div class="scen-grid">${scenCards}</div>
+        <div id="adaptBox" class="adapt-box"></div>
+        <p id="setupErr" class="err"></p>
+        <button id="btnStart" class="btn primary big full">دخول المحاكاة 3D</button>
+        <p class="hint">ستبدأ جالسًا داخل الفصل. بعد ${APP_CONFIG.emergencyDelaySec} ثوانٍ يبدأ الإنذار. استخدم WASD + الفأرة.</p>
       </div>
-      ${lastSessions[0] ? `<p class="info">👋 مرحبًا ${escapeHtml(state.studentName)} — مستواك المقترح: <b>${LEVEL_LABELS[lastSessions[0].nextLevel] || lastSessions[0].nextLevel}</b> (من آخر تدريب)</p>` : ''}
-      <div class="scen-grid">${scenCards}</div>
-      <div id="adaptBox" class="adapt-box"></div>
-      <button id="btnStart" class="btn primary big full">🚀 دخول المحاكاة 3D</button>
-      <p class="hint">ستبدأ جالسًا داخل الفصل. بعد ${APP_CONFIG.emergencyDelaySec} ثوانٍ يبدأ الإنذار. استخدم WASD + الفأرة.</p>
+      <p id="setupHint" class="hint ${state.userType ? 'hidden' : ''}">اختر نوع المستخدم أولًا لعرض السيناريوهات.</p>
     </div>
   </div>`
 
   el.querySelectorAll('[data-type]').forEach((b) => {
     b.onclick = () => {
       state.userType = b.dataset.type
-      const box = el.querySelector('#adaptBox')
-      box.innerHTML = adaptPreview(state.userType)
       el.querySelectorAll('[data-type]').forEach((x) => x.classList.toggle('active', x === b))
+      // بعد الاختيار: إظهار الخطوة الثانية
+      el.querySelector('#setupStep2')?.classList.remove('hidden')
+      el.querySelector('#setupHint')?.classList.add('hidden')
+      const box = el.querySelector('#adaptBox')
+      if (box) box.innerHTML = adaptPreview(state.userType)
     }
   })
   el.querySelectorAll('[data-scen]').forEach((b) => {
@@ -95,12 +108,30 @@ export function renderSetup(el, state) {
   })
   el.querySelector('#inpName').oninput = (e) => { state.studentName = e.target.value.trim() }
   el.querySelector('#selLevel').onchange = (e) => { state.startLevel = e.target.value }
-  el.querySelector('#adaptBox').innerHTML = adaptPreview(state.userType)
+  const adaptBox = el.querySelector('#adaptBox')
+  if (adaptBox) adaptBox.innerHTML = adaptPreview(state.userType || 'general')
   el.querySelector('#btnStart').onclick = () => {
-    if (!state.studentName) {
-      state.studentName = 'متدربة_' + Math.floor(Math.random() * 900 + 100)
+    const err = el.querySelector('#setupErr')
+    if (!state.userType) {
+      if (err) err.textContent = 'اختر نوع المستخدم أولًا.'
+      return
     }
-    location.hash = '#/train'
+    if (!state.scenarioId) {
+      if (err) err.textContent = 'اختر السيناريو أولًا.'
+      return
+    }
+    const saved = setTrainingConfig({
+      traineeName: state.studentName,
+      userType: state.userType,
+      scenarioId: state.scenarioId,
+      startingLevel: state.startLevel || 'easy',
+    })
+    if (!saved) {
+      if (err) err.textContent = 'البيانات غير مكتملة — تحقق من النوع والسيناريو.'
+      return
+    }
+    // الدخول للمحاكاة 3D فقط بضغطة صريحة من المستخدم (لا auto-start أبدًا)
+    location.hash = '#/simulation'
   }
 }
 
@@ -119,11 +150,49 @@ function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 }
 
-// ---------------- مشغّل التدريب 3D ----------------
+// ---------------- TRAINING_3D: مشغّل التدريب ----------------
+// الواجهة القديمة "محاكاة الإخلاء في حالات الحريق" محفوظة هنا كـ Intro
+// داخل TRAINING_3D فقط — لا Canvas ولا Scene ولا صوت قبل "ابدأ التجربة".
 export function startTraining(el, state) {
-  const scenario = getScenario(state.scenarioId || 'fire-basic')
-  const userType = state.userType || 'general'
-  const startLevel = state.startLevel || scenario.startLevel || 'easy'
+  // المصدر الرسمي: trainingConfig من sessionStorage (يُزامَن مع state للتوافق)
+  const cfg = getTrainingConfig() || {}
+  const scenarioId = resolveScenarioId(cfg.scenarioId || state.scenarioId || '')
+  const scenario = getScenario(scenarioId || 'fire-basic')
+  const userType = cfg.userType || state.userType || 'general'
+  const startLevel = cfg.startingLevel || state.startLevel || scenario.startLevel || 'easy'
+  const traineeName = cfg.traineeName || state.studentName || 'متدربة'
+  // زامن state مع الـ config الرسمي حتى تستخدمه بقية الدوال
+  state.userType = userType
+  state.scenarioId = scenario.id
+  state.startLevel = startLevel
+  state.studentName = traineeName
+
+  el.innerHTML = `
+  <div class="page">
+    <div class="card" style="text-align:center;max-width:640px;margin:40px auto">
+      <div class="logo">🔥</div>
+      <h2>محاكاة الإخلاء في حالات الحريق</h2>
+      <p class="hint">${escapeHtml(scenario.title)} · ${escapeHtml(userTypeLabel(userType))} · ${escapeHtml(traineeName)} · ${escapeHtml(LEVEL_LABELS[startLevel] || startLevel)}</p>
+      <p>${escapeHtml(scenario.briefing || '')}</p>
+      <p class="hint">ستدخل الفصل ثلاثي الأبعاد. لا يبدأ الإنذار ولا Pointer Lock إلا بعد ضغط الزر.</p>
+      <button id="btnEnter3D" class="btn primary big full">ابدأ التجربة</button>
+      <p><a class="back" href="#/train">→ عودة للإعداد</a></p>
+    </div>
+  </div>`
+
+  let cleanup3D = null
+  let entered = false
+  el.querySelector('#btnEnter3D').onclick = () => {
+    if (entered) return
+    entered = true
+    cleanup3D = initSimulation3D(el, state, scenario, userType, startLevel)
+  }
+  return () => { try { cleanup3D?.() } catch {} }
+}
+
+// تهيئة الـ 3D الفعلية: Scene + Player + Simulation + Audio + Tracking.
+// لا تُستدعى إلا من زر "ابدأ التجربة" داخل startTraining (أي داخل enterSimulation).
+function initSimulation3D(el, state, scenario, userType, startLevel) {
 
   el.innerHTML = `
   <div class="train-wrap ${userType === 'visual' ? 'high-contrast' : ''}">
@@ -329,7 +398,7 @@ export function startTraining(el, state) {
     if (finished && !pausedByCursor) return
     try { if (document.pointerLockElement) document.exitPointerLock?.() } catch {}
     cleanup()
-    location.hash = '#/setup'
+    location.hash = '#/train'
   }
   $('btnQuit').onclick = () => exitTraining()
   // زر إظهار المؤشر — بديل ESC (يحرر Pointer Lock مؤقتًا → تظهر نافذة الخيارين عبر onUnlock)
@@ -366,7 +435,7 @@ export function startTraining(el, state) {
     try { document.exitPointerLock?.() } catch {}
     $('lockOverlay').classList.add('hidden') // لا تغطِّ نافذة المساعدة
     tracker.markHelp()
-    audio.setAlarmVolume(0.5) // خفض الإنذار إلى 50%
+    audio.setAlarmBaseVolume(0.5) // خفض الإنذار إلى 50% (مستوى أساسي — يُستعاد بعد النداء إن كان نشطًا)
     const h = helpContent(userType, scenario)
     const p = $('helpPanel')
     p.innerHTML = `<b>${escapeHtml(h.title)}</b><div>${escapeHtml(h.text)}</div>
@@ -389,8 +458,13 @@ export function startTraining(el, state) {
         lockOverlayEl()?.classList.remove('hidden')
       }
     }
-    if (h.speak) speak(h.speak, userType)
-    else if (userType === 'visual') speak(h.text, userType)
+    // التوجيه الصوتي أثناء المساعدة: لا يتداخل مع النداء الجاري.
+    // ضعف سمعي: المعلومة الأساسية تبقى مرئية دائمًا (النص + الوميض أعلاه).
+    // ضعف بصري: النداء يعمل كاملًا، ورسائل TTS اللاحقة تُستكمل بعد انتهائه.
+    if (!audio.isAnnouncementPlaying()) {
+      if (h.speak) speak(h.speak, userType)
+      else if (userType === 'visual') speak(h.text, userType)
+    }
     if (h.flash || userType === 'hearing') {
       const f = $('flash')
       f.classList.remove('hidden')
@@ -404,7 +478,10 @@ export function startTraining(el, state) {
     emergencyActive = true
     tracker.markEmergencyStart()
     emergencyAt = Date.now()
+    // 1) الإنذار أولًا (Loop طوال الإخلاء) 2) النداء الخاص بالسيناريو بعده بـ ~1 ثانية
+    // مع Ducking تلقائي: الإنذار ينخفض لـ 25% أثناء الكلام ثم يعود تدريجيًا.
     audio.startAlarm()
+    audio.playAnnouncement(scenario.id, { delayMs: 1000, userType })
     $('alertBar').classList.remove('hidden')
     document.body.classList.add('emergency')
     if (userType === 'hearing') {
@@ -414,11 +491,9 @@ export function startTraining(el, state) {
     const msg = userType === 'learning' ? 'اخرج من الفصل.' : `🚨 ${scenario.briefing} (${scenario.correctExit === 'main' ? 'المخرج الرئيسي' : 'المخرج البديل'})`
     $('banner').textContent = msg
     $('banner').className = 'banner danger'
-    if (userType === 'visual') {
-      speak(`إنذار حريق! ${scenario.correctExit === 'main' ? 'اتجه نحو المخرج الرئيسي شرقا' : 'اتجه نحو المخرج البديل غربا'} ثم إلى منطقة التجمع.`, userType)
-    } else if (userType === 'general' || userType === 'motor') {
-      speak('إنذار حريق. يرجى الإخلاء فورًا.', userType)
-    }
+    // ملاحظة: لا TTS هنا — ملف النداء الصوتي الحقيقي (WAV) يغطي التوجيه الصوتي
+    // لجميع الأنواع بما فيها ضعف البصر، حتى لا يتداخل صوتان معًا.
+    // ضعف السمع: التنبيه البصري (وميض + لافتة + أسهم) أعلاه يبقى المصدر الأساسي.
     if (userType === 'learning') $('stepBox')?.classList.remove('hidden')
   }
 
@@ -431,7 +506,7 @@ export function startTraining(el, state) {
     }
     toast(labels[type] || '⚠️ خطأ')
     audio.beep(220, 0.25)
-    if (userType === 'visual') speak(labels[type] || 'انتبه', userType)
+    if (userType === 'visual' && !audio.isAnnouncementPlaying()) speak(labels[type] || 'انتبه', userType)
   }
 
   function finishTraining(reached) {
@@ -439,6 +514,8 @@ export function startTraining(el, state) {
     finished = true
     modalOpen = true // التقرير Modal حقيقي — إيقاف الحركة نهائيًا
     player.enabled = false
+    // نجاح الإخلاء: إيقاف الإنذار + أي نداء جارٍ، ثم صوت النجاح فقط
+    audio.stopAnnouncement({ restore: false })
     audio.stopAlarm()
     audio.playSuccess()
     try { window.speechSynthesis?.cancel() } catch {}
@@ -481,7 +558,7 @@ export function startTraining(el, state) {
       // اقتراح سيناريو بنفس الصعوبة
       const cand = SCENARIOS.find((s) => s.difficulty === r.nextLevel)
       if (cand) state.scenarioId = cand.id
-      cleanup(); location.hash = '#/setup'
+      cleanup(); location.hash = '#/train'
     }
   }
 
@@ -517,7 +594,7 @@ export function startTraining(el, state) {
           if (Math.hypot(pos.x - targetX, pos.z - 10) < 5) {
             flags.add('near-ok')
             audio.beep(990, 0.4)
-            speak('أحسنت. أنت قريب من الاتجاه الصحيح. واصل.', userType)
+            if (!audio.isAnnouncementPlaying()) speak('أحسنت. أنت قريب من الاتجاه الصحيح. واصل.', userType)
             toast('🔊 أحسنت — الاتجاه صحيح')
           }
         }
@@ -569,7 +646,8 @@ export function startTraining(el, state) {
     cancelAnimationFrame(raf)
     window.removeEventListener('resize', onResize)
     try { player.dispose() } catch {}
-    try { audio.stopAlarm() } catch {}
+    // إنهاء يدوي/تنقل: إيقاف الإنذار + النداء + تنظيف كل timers/listeners
+    try { audio.dispose() } catch {}
     try { window.speechSynthesis?.cancel() } catch {}
     document.body.classList.remove('emergency')
     renderer.dispose()

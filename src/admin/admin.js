@@ -19,12 +19,10 @@ export function renderAdminLogin(el) {
     <div class="card login-box">
       <div class="logo">🔐</div>
       <h2>دخول المشرف</h2>
-      <p class="hint">نسخة تجريبية — Demo فقط وليست حماية إنتاجية</p>
-      <label>اسم المستخدم<input id="admUser" type="text" autocomplete="username" value="admin" /></label>
+      <label>اسم المستخدم<input id="admUser" type="text" autocomplete="username" /></label>
       <br/><label>كلمة المرور<input id="admPass" type="password" autocomplete="current-password" /></label>
       <p id="admErr" class="err"></p>
       <button id="admGo" class="btn primary big full">دخول اللوحة</button>
-      <p class="hint">الحساب التجريبي: <b>${APP_CONFIG.admin.username}</b> / <b>${APP_CONFIG.admin.password}</b></p>
       <a class="back" href="#/">→ عودة للرئيسية</a>
     </div>
   </div>`

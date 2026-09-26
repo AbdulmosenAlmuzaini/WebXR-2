@@ -14,6 +14,8 @@ export const SCENARIOS = [
     startLevel: 'easy',
     correctExit: 'main',
     briefing: 'اتبع الأسهم الخضراء نحو المخرج الرئيسي ثم إلى منطقة التجمع.',
+    // النداء الصوتي (يُشغَّل عبر src/audioManager.js — مسار Vite مدمج في الـ build)
+    announcement: 'voice-fire-basic.wav',
   },
   {
     id: 'fire-main-blocked',
@@ -25,6 +27,7 @@ export const SCENARIOS = [
     startLevel: 'medium',
     correctExit: 'alt',
     briefing: 'المخرج الرئيسي مغلق! اتبع الأسهم البرتقالية نحو المخرج البديل.',
+    announcement: 'voice-fire-blocked.wav',
   },
   {
     id: 'smoke-corridor',
@@ -39,6 +42,7 @@ export const SCENARIOS = [
     startLevel: 'medium',
     correctExit: 'main',
     briefing: 'تجنّب سحب الدخان الرمادية واتبع الأسهم نحو المخرج الرئيسي.',
+    announcement: 'voice-smoke.wav',
   },
   {
     id: 'alt-exit-choice',
@@ -50,6 +54,7 @@ export const SCENARIOS = [
     startLevel: 'hard',
     correctExit: 'alt',
     briefing: 'قيّم الموقف: الدخان قرب المخرج الرئيسي. اختر المخرج البديل.',
+    announcement: 'voice-alternate-exit.wav',
   },
 ]
 
