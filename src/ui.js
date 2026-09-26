@@ -20,7 +20,7 @@ export function renderHome(el) {
   <div class="page home">
     <div class="hero card">
       <div class="logo">🛡️</div>
-      <h1>SafeSense VR</h1>
+      <h1>سيف سينس VR</h1>
       <p class="subtitle">نظام تدريب افتراضي تكيفي للسلامة والإخلاء</p>
       <div class="home-actions">
         <a class="btn primary big" href="#/train">بدء التدريب</a>
