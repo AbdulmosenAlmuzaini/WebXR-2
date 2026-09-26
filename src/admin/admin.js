@@ -35,7 +35,11 @@ export function renderAdminLogin(el) {
     const p = norm(el.querySelector('#admPass').value)
     if (u === APP_CONFIG.admin.username && p === APP_CONFIG.admin.password) {
       setAdminLoggedIn(true)
-      location.hash = '#/admin'
+      if (location.hash === '#/admin') {
+        window.dispatchEvent(new Event('hashchange'))
+      } else {
+        location.hash = '#/admin'
+      }
     } else {
       el.querySelector('#admErr').textContent = 'بيانات الدخول غير صحيحة'
     }
