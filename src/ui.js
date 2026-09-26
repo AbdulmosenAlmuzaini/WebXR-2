@@ -20,8 +20,8 @@ export function renderHome(el) {
   <div class="page home">
     <div class="hero card">
       <div class="logo">🛡️</div>
-      <h1>سيف سينس VR</h1>
-      <p class="subtitle">نظام تدريب افتراضي تكيفي للسلامة والإخلاء</p>
+      <h1>محاكاة إخلاء الطوارئ</h1>
+      <p class="subtitle">منصة تدريب افتراضي تكيفي للسلامة والإخلاء</p>
       <div class="home-actions">
         <a class="btn primary big" href="#/train">بدء التدريب</a>
         <a class="btn ghost big" href="#/admin">دخول المشرف</a>
